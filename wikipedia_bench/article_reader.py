@@ -20,6 +20,7 @@ from .text_extract import (
     extract_pages_from_block,
     read_bz2_block,
 )
+from .wikitext import normalize_title, strip_navbox_region, strip_tag_blocks, strip_templates
 
 _INDEX_CACHE_MAGIC_V1 = b'WBIDX001'
 _INDEX_CACHE_MAGIC_V2 = b'WBIDX002'
@@ -27,20 +28,11 @@ _INDEX_CACHE_ENTRY = struct.Struct('<IQ')  # page_id (uint32), offset (uint64)
 _INDEX_V2_DTYPE = np.dtype([('pid', '<u4'), ('offset', '<u8')])
 _INDEX_V2_HEADER_SIZE = 8 + 4  # magic (8) + count (4) = 12 bytes
 
-# Regexes for wikitext cleanup (keep links intact)
-_RE_REF = re.compile(r'<ref[^>]*/>', re.DOTALL)
-_RE_REF_BLOCK = re.compile(r'<ref[^>]*>.*?</ref>', re.DOTALL)
-_RE_COMMENT = re.compile(r'<!--.*?-->', re.DOTALL)
-_RE_GALLERY = re.compile(r'<gallery[^>]*>.*?</gallery>', re.DOTALL)
-_RE_MATH = re.compile(r'<math[^>]*>.*?</math>', re.DOTALL)
-_RE_NOWIKI = re.compile(r'<nowiki[^>]*>.*?</nowiki>', re.DOTALL)
-_RE_TEMPLATE = re.compile(r'\{\{[^{}]*\}\}')
 _RE_FILE_LINK = re.compile(r'\[\[(?:File|Image):[^\]]*\]\]', re.IGNORECASE)
 _RE_CATEGORY = re.compile(r'\[\[Category:[^\]]*\]\]', re.IGNORECASE)
 _RE_HTML_TAG = re.compile(r'<[^>]+>')
 _RE_MULTI_NEWLINE = re.compile(r'\n{3,}')
 _RE_MULTI_SPACE = re.compile(r'  +')
-_RE_HEADING = re.compile(r'^(={2,6})\s*(.+?)\s*\1\s*$', re.MULTILINE)
 
 # Navbox prefixes to strip from end
 _NAVBOX_PREFIXES = (
@@ -158,26 +150,14 @@ def _process_wikitext(text: str) -> str:
     infobox_text = _extract_infobox(text)
 
     # Strip navbox/footer region
-    text = _strip_navbox_region(text)
-
-    # Strip HTML-like tags we don't want
-    text = _RE_REF.sub('', text)
-    text = _RE_REF_BLOCK.sub('', text)
-    text = _RE_COMMENT.sub('', text)
-    text = _RE_GALLERY.sub('', text)
-    text = _RE_MATH.sub('', text)
-    text = _RE_NOWIKI.sub('', text)
+    text = strip_navbox_region(text, _NAVBOX_PREFIXES)
+    text = strip_tag_blocks(text)
 
     # Strip File/Image and Category links
     text = _RE_FILE_LINK.sub('', text)
     text = _RE_CATEGORY.sub('', text)
 
-    # Strip templates iteratively
-    for _ in range(10):
-        new = _RE_TEMPLATE.sub('', text)
-        if new == text:
-            break
-        text = new
+    text = strip_templates(text)
 
     # Strip bold/italic markup
     text = text.replace("'''", '').replace("''", '')
@@ -269,16 +249,9 @@ def _extract_infobox(text: str) -> str:
 
         # Clean the value: strip nested templates, refs, but keep [[links]]
         val = _expand_date_templates(value)
-        val = _RE_REF.sub('', val)
-        val = _RE_REF_BLOCK.sub('', val)
-        val = _RE_COMMENT.sub('', val)
+        val = strip_tag_blocks(val)
         val = _RE_HTML_TAG.sub('', val)
-        # Strip templates inside values
-        for _ in range(5):
-            new = _RE_TEMPLATE.sub('', val)
-            if new == val:
-                break
-            val = new
+        val = strip_templates(val, max_passes=5)
         # Clean Flatlist markers
         val = val.replace('*', ', ').replace('\n', ' ')
         val = _RE_MULTI_SPACE.sub(' ', val).strip()
@@ -382,31 +355,6 @@ def _split_infobox_fields(infobox: str) -> list[tuple[str, str]]:
             pairs.append((key.strip(), value.strip()))
 
     return pairs
-
-
-def _strip_navbox_region(wikitext: str) -> str:
-    """Remove navbox/footer template regions from the end of wikitext."""
-    lines = wikitext.split('\n')
-    cutoff = len(lines)
-
-    i = len(lines) - 1
-    while i >= 0:
-        stripped = lines[i].strip().lower()
-        if stripped.startswith('{{'):
-            template_name = stripped[2:].split('|')[0].split('}')[0].strip()
-            if any(template_name.startswith(p) for p in _NAVBOX_PREFIXES):
-                cutoff = i
-                i -= 1
-                continue
-        if stripped == '' or stripped.startswith('[[category:'):
-            cutoff = i
-            i -= 1
-            continue
-        break
-
-    return '\n'.join(lines[:cutoff])
-
-
 def _save_index_cache_v2(pid_to_offset: dict[int, int], cache_path: Path) -> None:
     """Save pid->offset mapping as a sorted, mmap-friendly binary file.
 
@@ -536,9 +484,7 @@ def _extract_link_targets(text: str) -> list[LinkWithContext]:
     for m in _RE_WIKILINK.finditer(text):
         target = m.group(1).strip()
         # Normalize: first char uppercase, spaces to underscores
-        target = target.replace(' ', '_')
-        if target and target[0].islower():
-            target = target[0].upper() + target[1:]
+        target = normalize_title(target)
         if not target or target in seen:
             continue
         seen.add(target)

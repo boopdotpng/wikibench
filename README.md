@@ -26,7 +26,7 @@ The XML dump (~25 GB) downloads via BitTorrent (requires `aria2c`). Everything e
 ./scripts/run_pipeline.sh --skip-download
 ```
 
-This imports SQL dumps into SQLite, builds the link graph, extracts article text, and samples episodes. Takes less than an hour depending on disk speed. Requires ~125 GB free disk space.
+This imports SQL dumps into SQLite, builds the link graph, extracts article text, and samples a single benchmark set. The default target is 100 reviewed benchmark episodes plus 3 hard bonus episodes. The sampler writes `benchmark.jsonl` plus a sibling review CSV, and also emits `hard_bonus.jsonl` with a tiny set of 6-7 hop stretch examples. Takes less than an hour depending on disk speed. Requires ~125 GB free disk space.
 
 ### 3. Run the MCP server
 
@@ -112,9 +112,14 @@ Step limit: `max(2 * shortest_path_len + 4, 12)`
 
 | Difficulty | Shortest path |
 |------------|---------------|
-| Easy | 2-3 clicks |
-| Medium | 4-5 clicks |
-| Hard | 6+ clicks |
+| Easy | 3-4 clicks |
+| Medium | 5 clicks |
+
+Bonus set:
+
+| Set | Shortest path |
+|-----|---------------|
+| Hard bonus | 6-7 clicks |
 
 ## Project structure
 
@@ -145,7 +150,7 @@ wikibench/
     sample_episodes.py       # sample episodes
     run_mcp_server.py        # launch MCP server
     evaluate.py              # batch evaluation harness
-  episodes/                  # pre-sampled episode splits (.jsonl)
+  episodes/                  # benchmark + bonus sets (.jsonl/.csv)
   tests/
     test_integration.py      # full pipeline integration test
     test_sql_parser.py       # SQL parser unit tests

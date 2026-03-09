@@ -12,7 +12,7 @@ import click
               type=click.Path(exists=True))
 @click.option('--graph-dir', default='data/processed',
               type=click.Path(exists=True))
-@click.option('--episodes', default='episodes/dev.jsonl',
+@click.option('--episodes', default='episodes/benchmark.jsonl',
               type=click.Path(exists=True))
 @click.option('--dump-path', default='data/raw/enwiki-latest-pages-articles-multistream.xml.bz2',
               type=click.Path(exists=True))

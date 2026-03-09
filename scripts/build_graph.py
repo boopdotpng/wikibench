@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from wikipedia_bench.db import open_db, set_meta
+from wikipedia_bench.db import open_db
 from wikipedia_bench.graph import build_graph
 
 

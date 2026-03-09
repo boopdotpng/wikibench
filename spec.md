@@ -129,15 +129,32 @@ Full article text is read on-the-fly from the multistream XML dump using a byte-
 
 ## 7. episode sampling
 
-Pairs are sampled from the frozen graph with shortest-path verification via bidirectional BFS.
+The benchmark uses a single frozen `benchmark.jsonl` dataset rather than separate dev/test splits.
+Pairs are sampled from the frozen graph with a walk-first strategy:
+
+- easy targets shortest paths of 3-4
+- medium targets shortest path 5
+- a tiny hard bonus set targets shortest paths of 6-7
+- candidate targets come from short random walks
+- each candidate pair is then verified with bidirectional BFS
+- shortest-path verification is capped at depth 7
+- hard examples bias toward low out-degree source pages and low out-degree walk neighbors to stay out of the dense graph core
+- generation writes both JSONL and a review CSV with blank review fields for keep/drop/regenerate decisions
+
+This is intentionally optimized for generation speed. Random-pair rejection sampling is cheap for 3-5 hop pairs but wastes a lot of time chasing scarce 6-7 hop examples, so the main benchmark stops at medium and the rare tail is reported separately.
 
 | Difficulty | Shortest path | Step limit formula |
 |------------|---------------|--------------------|
-| Easy | 2-3 | max(2*sp + 4, 12) |
-| Medium | 4-5 | max(2*sp + 4, 12) |
-| Hard | 6+ | max(2*sp + 4, 12) |
+| Easy | 3-4 | max(2*sp + 4, 12) |
+| Medium | 5 | max(2*sp + 4, 12) |
 
-Fixed RNG seeds for reproducibility. Hub-filtered splits available (exclude high-degree navigation hubs from start/target).
+Bonus set:
+
+| Set | Shortest path | Step limit formula |
+|-----|---------------|--------------------|
+| Hard bonus | 6-7 | max(3*sp + 4, 20) |
+
+Fixed RNG seeds are used for reproducibility. The intended output is a single reviewed benchmark set plus a tiny hard bonus set; rejected episodes can be regenerated and swapped in after manual review.
 
 ## 8. scoring
 

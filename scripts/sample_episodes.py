@@ -1,4 +1,4 @@
-"""Sample benchmark episodes from the frozen graph."""
+"""Sample a single benchmark episode set from the frozen graph."""
 
 from __future__ import annotations
 
@@ -17,23 +17,28 @@ from wikipedia_bench.sampler import sample_episodes
               type=click.Path(exists=True), help='SQLite database path')
 @click.option('--graph-dir', default='data/processed',
               type=click.Path(exists=True), help='Graph files directory')
-@click.option('--episodes-dir', default='episodes',
-              type=click.Path(), help='Output directory for episode JSONL files')
-@click.option('--n-dev', default=500, help='Number of dev episodes')
-@click.option('--n-test', default=2000, help='Number of test episodes')
+@click.option('--episodes-path', default='episodes/benchmark.jsonl',
+              type=click.Path(), help='Output JSONL path for the benchmark episodes (writes a sibling CSV too)')
+@click.option('--hard-bonus-path', default='episodes/hard_bonus.jsonl',
+              type=click.Path(), help='Output JSONL path for the hard bonus episodes (writes a sibling CSV too)')
+@click.option('--n-total', default=100, help='Total number of benchmark episodes')
+@click.option('--n-hard-bonus', default=3, help='Number of hard bonus episodes at depth 6-7')
 @click.option('--seed', default=42, help='Base RNG seed')
-@click.option('--hub-threshold', default=50_000,
-              help='Out-degree threshold for hub classification')
+@click.option('--max-sample-depth', default=7, help='Maximum shortest-path depth to verify')
+@click.option('--hard-source-max-out-degree', default=20,
+              help='Prefer low out-degree pages as hard-example sources')
 def main(
     db_path: str,
     graph_dir: str,
-    episodes_dir: str,
-    n_dev: int,
-    n_test: int,
+    episodes_path: str,
+    hard_bonus_path: str,
+    n_total: int,
+    n_hard_bonus: int,
     seed: int,
-    hub_threshold: int,
+    max_sample_depth: int,
+    hard_source_max_out_degree: int,
 ) -> None:
-    """Sample episodes with difficulty bucketing and write JSONL splits."""
+    """Sample a single benchmark set and write it to JSONL."""
     conn = open_db(Path(db_path), readonly=True)
 
     print("Loading graph...")
@@ -46,17 +51,20 @@ def main(
     results = sample_episodes(
         graph,
         conn,
-        n_dev=n_dev,
-        n_test=n_test,
+        n_total=n_total,
+        n_hard_bonus=n_hard_bonus,
         seed=seed,
-        hub_threshold=hub_threshold,
-        episodes_dir=Path(episodes_dir),
+        max_sample_depth=max_sample_depth,
+        hard_source_max_out_degree=hard_source_max_out_degree,
+        episodes_path=Path(episodes_path),
+        hard_bonus_path=Path(hard_bonus_path),
     )
     elapsed = time.time() - t0
 
-    total = sum(len(v) for v in results.values())
-    print(f"\nSampled {total} total episodes in {elapsed:.1f}s")
-
+    print(
+        f"\nSampled {len(results['benchmark'])} benchmark episodes and "
+        f"{len(results['hard_bonus'])} hard bonus episodes in {elapsed:.1f}s"
+    )
     conn.close()
 
 

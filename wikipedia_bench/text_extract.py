@@ -14,25 +14,25 @@ import sqlite3
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Iterator
+
+from .wikitext import normalize_title, strip_navbox_region, strip_tag_blocks, strip_templates
 
 # Lead text limits
 MAX_LEAD_CHARS = 4000  # roughly 800-1500 tokens
 MAX_LEAD_PARAGRAPHS = 3
-
-# Patterns to strip from wikitext before parsing
-_RE_REF = re.compile(r'<ref[^>]*/>', re.DOTALL)
-_RE_REF_BLOCK = re.compile(r'<ref[^>]*>.*?</ref>', re.DOTALL)
-_RE_COMMENT = re.compile(r'<!--.*?-->', re.DOTALL)
-_RE_GALLERY = re.compile(r'<gallery[^>]*>.*?</gallery>', re.DOTALL)
-_RE_MATH = re.compile(r'<math[^>]*>.*?</math>', re.DOTALL)
-_RE_NOWIKI = re.compile(r'<nowiki[^>]*>.*?</nowiki>', re.DOTALL)
 
 # Post-parse cleanup
 _RE_MULTI_NEWLINE = re.compile(r'\n{3,}')
 _RE_MULTI_SPACE = re.compile(r'  +')
 _RE_PAREN_EMPTY = re.compile(r'\(\s*\)')
 _RE_BRACKET_EMPTY = re.compile(r'\[\s*\]')
+
+_LINK_EXTRACTION_NAVBOX_PREFIXES = (
+    'navbox', 'authority control', 'taxonbar', 'portal bar',
+    'portal', 'commons category', 'wikiquote', 'wikisource',
+    'wiktionary', 'reflist', 'notelist', 'refbegin', 'refend',
+    'cite', 'citation', 'sfn', 'efn', 'cnote',
+)
 
 
 def parse_multistream_index(index_path: Path) -> dict[str, tuple[int, int]]:
@@ -194,13 +194,7 @@ def extract_lead_text(wikitext: str) -> str:
     else:
         lead_wikitext = wikitext
 
-    # Strip HTML-like tags we don't want
-    lead_wikitext = _RE_REF.sub('', lead_wikitext)
-    lead_wikitext = _RE_REF_BLOCK.sub('', lead_wikitext)
-    lead_wikitext = _RE_COMMENT.sub('', lead_wikitext)
-    lead_wikitext = _RE_GALLERY.sub('', lead_wikitext)
-    lead_wikitext = _RE_MATH.sub('', lead_wikitext)
-    lead_wikitext = _RE_NOWIKI.sub('', lead_wikitext)
+    lead_wikitext = strip_tag_blocks(lead_wikitext)
 
     # Use fast regex-based stripping (mwparserfromhell is too slow for bulk)
     text = _regex_strip_wikitext(lead_wikitext)
@@ -224,18 +218,9 @@ def extract_lead_text(wikitext: str) -> str:
     return text
 
 
-_RE_TEMPLATE = re.compile(r'\{\{[^{}]*\}\}')
-
-
 def _regex_strip_wikitext(text: str) -> str:
     """Fast wikitext stripper using regex."""
-    # Strip templates {{...}} iteratively (handles nesting via repeated passes)
-    # Most templates are removed in 2-3 passes; cap at 10 to avoid pathological cases
-    for _ in range(10):
-        new = _RE_TEMPLATE.sub('', text)
-        if new == text:
-            break
-        text = new
+    text = strip_templates(text)
 
     # Convert wikilinks [[target|display]] -> display, [[target]] -> target
     text = re.sub(r'\[\[(?:[^|\]]*\|)?([^\]]*)\]\]', r'\1', text)
@@ -260,46 +245,10 @@ def extract_links_from_wikitext(wikitext: str) -> list[str]:
     """
     # Find the article body (everything up to navbox/footer templates)
     # Navboxes are typically at the very end, inside {{Navbox or similar
-    body = _strip_navbox_region(wikitext)
+    body = strip_navbox_region(wikitext, _LINK_EXTRACTION_NAVBOX_PREFIXES)
 
     # Use fast regex-based extraction (mwparserfromhell is too slow for bulk)
     return _regex_extract_links(body)
-
-
-def _strip_navbox_region(wikitext: str) -> str:
-    """Remove navbox/footer template regions from the end of wikitext.
-
-    Navboxes are typically {{Navbox, {{Authority control}}, {{Taxonbar}},
-    {{Portal bar}}, etc. at the very end of the article.
-    """
-    # Common navbox template names (case-insensitive starts)
-    navbox_prefixes = (
-        'navbox', 'authority control', 'taxonbar', 'portal bar',
-        'portal', 'commons category', 'wikiquote', 'wikisource',
-        'wiktionary', 'reflist', 'notelist', 'refbegin', 'refend',
-        'cite', 'citation', 'sfn', 'efn', 'cnote',
-    )
-
-    lines = wikitext.split('\n')
-    cutoff = len(lines)
-
-    # Scan from the end, looking for where navbox templates start
-    i = len(lines) - 1
-    while i >= 0:
-        stripped = lines[i].strip().lower()
-        if stripped.startswith('{{'):
-            template_name = stripped[2:].split('|')[0].split('}')[0].strip()
-            if any(template_name.startswith(p) for p in navbox_prefixes):
-                cutoff = i
-                i -= 1
-                continue
-        if stripped == '' or stripped.startswith('[[category:'):
-            cutoff = i
-            i -= 1
-            continue
-        break
-
-    return '\n'.join(lines[:cutoff])
 
 
 def _regex_extract_links(text: str) -> list[str]:
@@ -317,8 +266,7 @@ def _regex_extract_links(text: str) -> list[str]:
         title = title.split('#', 1)[0].strip()
         if not title:
             continue
-        title = title.replace(' ', '_')
-        title = title[0].upper() + title[1:] if title else title
+        title = normalize_title(title)
         if title not in seen:
             seen.add(title)
             links.append(title)

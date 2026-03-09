@@ -24,13 +24,10 @@ def score_episode(
     )
 
     # Build path of titles
-    path_titles = []
-    for pid in state.path:
-        idx = _pid_to_idx(pid)
-        if idx is not None:
-            path_titles.append(idx_to_title.get(idx, f"?{pid}"))
-        else:
-            path_titles.append(f"?{pid}")
+    path_titles = [
+        idx_to_title.get(idx, f"?{pid}") if (idx := _pid_to_idx(pid)) is not None else f"?{pid}"
+        for pid in state.path
+    ]
 
     # Shortest path (recompute via bidi-BFS for accuracy)
     src_idx = _pid_to_idx(state.episode.start_page_id)

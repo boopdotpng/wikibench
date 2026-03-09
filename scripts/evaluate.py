@@ -11,13 +11,10 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict
 from pathlib import Path
 
 import click
 
-from wikipedia_bench.db import open_db
-from wikipedia_bench.graph import CSRGraph
 from wikipedia_bench.mcp_server import WikiBenchEngine
 from wikipedia_bench.schemas import load_episodes_jsonl
 
@@ -146,7 +143,7 @@ def aggregate_metrics(traces: list[dict]) -> dict:
               type=click.Path(exists=True))
 @click.option('--graph-dir', default='data/processed',
               type=click.Path(exists=True))
-@click.option('--episodes', default='episodes/dev.jsonl',
+@click.option('--episodes', default='episodes/benchmark.jsonl',
               type=click.Path(exists=True))
 @click.option('--n', default=0, help='Number of episodes to run (0 = all)')
 @click.option('--output', default='reports/eval_results.json',

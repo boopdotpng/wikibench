@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import csv
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Literal
@@ -12,14 +13,14 @@ from typing import Literal
 class Episode:
     """A pre-sampled benchmark episode."""
     episode_id: str
-    split: str  # 'dev' | 'test'
+    split: str  # dataset tag, e.g. 'benchmark'
     seed: int
     start_page_id: int
     target_page_id: int
     start_title: str
     target_title: str
     shortest_path_len: int
-    difficulty: str  # 'easy' | 'medium' | 'hard' | 'nightmare'
+    difficulty: str  # 'easy' | 'medium' | 'hard'
     step_limit: int
 
     def to_json(self) -> str:
@@ -88,15 +89,41 @@ class ScoreResult:
 def write_episodes_jsonl(episodes: list[Episode], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
-        for ep in episodes:
-            f.write(ep.to_json() + '\n')
+        f.writelines(f'{ep.to_json()}\n' for ep in episodes)
+
+
+def write_episodes_csv(episodes: list[Episode], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [asdict(ep) for ep in episodes]
+    fieldnames = [
+        'episode_id',
+        'split',
+        'seed',
+        'start_page_id',
+        'target_page_id',
+        'start_title',
+        'target_title',
+        'shortest_path_len',
+        'difficulty',
+        'step_limit',
+        'review_status',
+        'review_notes',
+        'replacement_for_episode_id',
+    ]
+    with open(path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            row['review_status'] = ''
+            row['review_notes'] = ''
+            row['replacement_for_episode_id'] = ''
+            writer.writerow(row)
 
 
 def load_episodes_jsonl(path: Path) -> list[Episode]:
-    episodes = []
     with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                episodes.append(Episode.from_json(line))
-    return episodes
+        return [
+            Episode.from_json(line)
+            for raw_line in f
+            if (line := raw_line.strip())
+        ]

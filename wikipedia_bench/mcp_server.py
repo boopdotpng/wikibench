@@ -20,10 +20,11 @@ import numpy as np
 from .article_reader import ArticleReader, ParsedArticle, parse_article_sections
 from .graph import CSRGraph
 from .schemas import (
-    Episode, EpisodeState, PageObservation, SectionSummary, ScoreResult,
+    EpisodeState, PageObservation, SectionSummary,
     load_episodes_jsonl,
 )
 from .scorer import score_episode
+from .wikitext import normalize_title
 
 # Episode idle expiry in seconds
 EPISODE_EXPIRY = 30 * 60  # 30 minutes
@@ -218,37 +219,25 @@ class WikiBenchEngine:
         state.last_active_at = time.time()
 
         # Normalize the clicked title
-        title_norm = title.replace(' ', '_')
-        if title_norm:
-            title_norm = title_norm[0].upper() + title_norm[1:]
+        title_norm = normalize_title(title)
 
         # Check legality: title must be in the current page's link set
         current_links = self._get_page_links(state.current_page_id)
         if title_norm not in current_links:
-            state.invalid_actions += 1
-            if state.invalid_actions >= INVALID_ACTION_LIMIT:
-                state.terminated = True
-                state.terminated_reason = 'invalid_action_limit'
-            return {
-                "ok": False,
-                "done": state.terminated,
-                "error": f"'{title}' is not a valid link on the current page",
-                "observation": asdict(self._make_observation(state, episode_id)),
-            }
+            return self._invalid_click(
+                state,
+                episode_id,
+                f"'{title}' is not a valid link on the current page",
+            )
 
         # Resolve the target (follows redirects to canonical page)
         dst_pid = self._resolve_title_to_pid(title_norm)
         if dst_pid is None:
-            state.invalid_actions += 1
-            if state.invalid_actions >= INVALID_ACTION_LIMIT:
-                state.terminated = True
-                state.terminated_reason = 'invalid_action_limit'
-            return {
-                "ok": False,
-                "done": state.terminated,
-                "error": f"'{title}' could not be resolved to a canonical page",
-                "observation": asdict(self._make_observation(state, episode_id)),
-            }
+            return self._invalid_click(
+                state,
+                episode_id,
+                f"'{title}' could not be resolved to a canonical page",
+            )
 
         # Move
         state.clicks += 1
@@ -343,6 +332,18 @@ class WikiBenchEngine:
 
     def _get_state(self, episode_id: str) -> EpisodeState | None:
         return self._episodes.get(episode_id)
+
+    def _invalid_click(self, state: EpisodeState, episode_id: str, error: str) -> dict:
+        state.invalid_actions += 1
+        if state.invalid_actions >= INVALID_ACTION_LIMIT:
+            state.terminated = True
+            state.terminated_reason = 'invalid_action_limit'
+        return {
+            "ok": False,
+            "done": state.terminated,
+            "error": error,
+            "observation": asdict(self._make_observation(state, episode_id)),
+        }
 
     def _lookup_pid_to_idx(self, pid: int) -> int | None:
         """Look up node_idx for a page_id. Returns None if not found."""
@@ -457,13 +458,10 @@ class WikiBenchEngine:
                         lead_paragraph = lead_paragraph[:cut + 1]
                 break
 
-        path_titles = []
-        for p in state.path:
-            i = self._lookup_pid_to_idx(p)
-            if i is not None:
-                path_titles.append(self._idx_to_title.get(i, f"?{p}"))
-            else:
-                path_titles.append(f"?{p}")
+        path_titles = [
+            self._idx_to_title.get(i, f"?{p}") if (i := self._lookup_pid_to_idx(p)) is not None else f"?{p}"
+            for p in state.path
+        ]
 
         return PageObservation(
             episode_id=episode_id,

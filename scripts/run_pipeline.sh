@@ -130,13 +130,14 @@ else
     fi
 fi
 
-# Step 5: Sample episodes
+# Step 5: Sample benchmark episodes
 if should_run "sample"; then
-    echo ">>> Step 5: Sampling episodes..."
+    echo ">>> Step 5: Sampling benchmark and hard bonus episodes..."
     uv run python3 scripts/sample_episodes.py \
         --db-path data/processed/wiki.db \
         --graph-dir data/processed \
-        --episodes-dir episodes
+        --episodes-path episodes/benchmark.jsonl \
+        --hard-bonus-path episodes/hard_bonus.jsonl
     echo ""
 fi
 
