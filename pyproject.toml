@@ -1,0 +1,21 @@
+[project]
+name = "wikibench"
+version = "0.1.0"
+description = "Wikipedia racing benchmark for LLMs"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.0",
+    "tqdm>=4.60",
+    "numpy>=2.0",
+    "mwparserfromhell>=0.6",
+    "mcp>=1.26.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+
+[project.scripts]
+wb-download = "scripts.download_dumps:main"
+wb-build-db = "scripts.build_db:main"
+wb-build-graph = "scripts.build_graph:main"
+wb-sample = "scripts.sample_episodes:main"

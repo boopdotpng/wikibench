@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "wikibench": {
+      "command": "uv",
+      "args": ["run", "python3", "scripts/run_mcp_server.py"],
+      "timeout": 120,
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

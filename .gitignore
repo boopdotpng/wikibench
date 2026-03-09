@@ -1,0 +1,25 @@
+# Data (too large for git)
+data/
+reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Binary caches (generated at runtime)
+*.cache
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# uv
+uv.lock
