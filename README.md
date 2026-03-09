@@ -26,7 +26,7 @@ The XML dump (~25 GB) downloads via BitTorrent (requires `aria2c`). Everything e
 ./scripts/run_pipeline.sh --skip-download
 ```
 
-This imports SQL dumps into SQLite, builds the link graph, extracts article text, and samples episodes. Takes 2-4 hours depending on disk speed. Requires ~150 GB free disk space.
+This imports SQL dumps into SQLite, builds the link graph, extracts article text, and samples episodes. Takes less than an hour depending on disk speed. Requires ~125 GB free disk space.
 
 ### 3. Run the MCP server
 
@@ -158,7 +158,7 @@ wikibench/
 
 - Python >= 3.12
 - [uv](https://docs.astral.sh/uv/) (package manager)
-- ~150 GB free disk space
+- ~125 GB free disk space
 - `aria2c` for the BitTorrent download (or download the XML dump manually)
 
 ## Dependencies
